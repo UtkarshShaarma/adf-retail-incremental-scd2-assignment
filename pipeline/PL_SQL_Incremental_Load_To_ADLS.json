@@ -41,7 +41,10 @@
 				"userProperties": [],
 				"typeProperties": {
 					"variableName": "v_serverName",
-					"value": "@activity('WEB_GetServerName').output.value"
+					"value": {
+						"value": "@activity('WEB_GetServerName').output.value",
+						"type": "Expression"
+					}
 				}
 			},
 			{
@@ -90,7 +93,10 @@
 				"userProperties": [],
 				"typeProperties": {
 					"variableName": "v_databaseName",
-					"value": "@activity('WEB_GetDatabaseName').output.value"
+					"value": {
+						"value": "@activity('WEB_GetDatabaseName').output.value",
+						"type": "Expression"
+					}
 				}
 			},
 			{
@@ -139,7 +145,10 @@
 				"userProperties": [],
 				"typeProperties": {
 					"variableName": "v_userName",
-					"value": "@activity('WEB_GetUserName').output.value"
+					"value": {
+						"value": "@activity('WEB_GetUserName').output.value",
+						"type": "Expression"
+					}
 				}
 			},
 			{
@@ -148,6 +157,193 @@
 				"dependsOn": [
 					{
 						"activity": "SET_v_userName",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT last_watermark_value\nFROM dbo.pipeline_watermark\nWHERE source_table_name = '@{pipeline().parameters.sourceTableName}';",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzureSQL_Parameterized",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaName": "dbo",
+							"tableName": "pipeline_watermark",
+							"ds_serverName": "@variables('v_serverName')",
+							"ds_databaseName": "@variables('v_databaseName')",
+							"ds_userName": "@variables('v_userName')"
+						}
+					}
+				}
+			},
+			{
+				"name": "LK_NewWatermark",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "LK_OldWatermark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT MAX(@{pipeline().parameters.watermarkColumn}) AS new_watermark_value\nFROM @{pipeline().parameters.sourceSchemaName}.@{pipeline().parameters.sourceTableName};",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzureSQL_Parameterized",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaName": "@pipeline().parameters.sourceSchemaName",
+							"tableName": "@pipeline().parameters.sourceTableName",
+							"ds_serverName": "@variables('v_serverName')",
+							"ds_databaseName": "@variables('v_databaseName')",
+							"ds_userName": "@variables('v_userName')"
+						}
+					}
+				}
+			},
+			{
+				"name": "CP_Incremental_SQL_to_ADLS",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "LK_NewWatermark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT *\nFROM @{pipeline().parameters.sourceSchemaName}.@{pipeline().parameters.sourceTableName}\nWHERE @{pipeline().parameters.watermarkColumn} >\n      '@{activity('LK_OldWatermark').output.firstRow.last_watermark_value}'\n  AND @{pipeline().parameters.watermarkColumn} <=\n      '@{activity('LK_NewWatermark').output.firstRow.new_watermark_value}';",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "ParquetSink",
+						"storeSettings": {
+							"type": "AzureBlobFSWriteSettings"
+						},
+						"formatSettings": {
+							"type": "ParquetWriteSettings"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_AzureSQL_Parameterized",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaName": "@pipeline().parameters.sourceSchemaName",
+							"tableName": "@pipeline().parameters.sourceTableName",
+							"ds_serverName": "@variables('v_serverName')",
+							"ds_databaseName": "@variables('v_databaseName')",
+							"ds_userName": "@variables('v_userName')"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_ADLS_Parquet_Parameterized",
+						"type": "DatasetReference",
+						"parameters": {
+							"containerName": "@pipeline().parameters.targetContainer",
+							"folderPath": "@pipeline().parameters.targetFolderPath",
+							"fileName": "@pipeline().parameters.targetFileName"
+						}
+					}
+				]
+			},
+			{
+				"name": "SC_UpdateWatermark",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "CP_Incremental_SQL_to_ADLS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_AzureSQL_Retail",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"serverName": "@variables('v_serverName')",
+						"databaseName": "@variables('v_databaseName')",
+						"userName": "@variables('v_userName')",
+						"passwordSecretName": "sql-password  (plain text)"
+					}
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": "UPDATE dbo.pipeline_watermark\nSET    last_watermark_value = '@{activity('LK_NewWatermark').output.firstRow.new_watermark_value}',\n       last_updated_at      = SYSUTCDATETIME()\nWHERE  source_table_name    = '@{pipeline().parameters.sourceTableName}';"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "DB_SCD2_Customer",
+				"type": "DatabricksNotebook",
+				"dependsOn": [
+					{
+						"activity": "SC_UpdateWatermark",
 						"dependencyConditions": [
 							"Succeeded"
 						]
