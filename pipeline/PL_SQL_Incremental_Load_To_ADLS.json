@@ -13,9 +13,162 @@
 					"secureOutput": false,
 					"secureInput": false
 				},
-				"userProperties": []
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": "https://kv-retailkart-utkarsh.vault.azure.net/secrets/sql-server-name?api-version=7.4",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "SET_v_serverName",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get sql-server-name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_serverName",
+					"value": "@activity('WEB_GetServerName').output.value"
+				}
+			},
+			{
+				"name": "WEB_GetDatabaseName",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "SET_v_serverName",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": "https://kv-retailkart-utkarsh.vault.azure.net/secrets/sql-database-name?api-version=7.4",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "SET_v_databaseName",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "WEB_GetDatabaseName",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_databaseName",
+					"value": "@activity('WEB_GetDatabaseName').output.value"
+				}
+			},
+			{
+				"name": "WEB_GetUserName",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "SET_v_databaseName",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": "https://kv-retailkart-utkarsh.vault.azure.net/secrets/sql-username?api-version=7.4",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "SET_v_userName",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "WEB_GetUserName",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_userName",
+					"value": "@activity('WEB_GetUserName').output.value"
+				}
 			}
 		],
+		"parameters": {
+			"sourceSchemaName": {
+				"type": "string",
+				"defaultValue": "dbo"
+			},
+			"sourceTableName": {
+				"type": "string",
+				"defaultValue": "retail_customers_source"
+			},
+			"watermarkColumn": {
+				"type": "string",
+				"defaultValue": "updated_at"
+			},
+			"targetContainer": {
+				"type": "string",
+				"defaultValue": "raw"
+			},
+			"targetFolderPath": {
+				"type": "string",
+				"defaultValue": "retail/customers/incremental/"
+			},
+			"targetFileName": {
+				"type": "string",
+				"defaultValue": "customers_incremental.parquet"
+			}
+		},
 		"variables": {
 			"v_serverName": {
 				"type": "String"
