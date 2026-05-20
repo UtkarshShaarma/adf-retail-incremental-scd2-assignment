@@ -351,31 +351,6 @@
 				}
 			},
 			{
-				"name": "DB_SCD2_Customer",
-				"type": "DatabricksNotebook",
-				"dependsOn": [],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"notebookPath": "/Users/updazvmnag_1777788728692@npupgradassessment.onmicrosoft.com/NB_SCD_Type2_Customer_Dimension",
-					"baseParameters": {
-						"raw_input_path": "@concat('abfss://', pipeline().parameters.targetContainer, '@stretailkart<initials>.dfs.core.windows.net/', pipeline().parameters.targetFolderPath)",
-						"curated_output_path": "abfss://curated@stretailkart<initials>.dfs.core.windows.net/retail/dim_customer/",
-						"storage_account_name": "stretailkartutkarsh"
-					}
-				},
-				"linkedServiceName": {
-					"referenceName": "LS_AzureDatabricks",
-					"type": "LinkedServiceReference"
-				}
-			},
-			{
 				"name": "IF_IsCustomerTable",
 				"type": "IfCondition",
 				"dependsOn": [
@@ -391,7 +366,37 @@
 					"expression": {
 						"value": "@equals(pipeline().parameters.sourceTableName, 'retail_customers_source')",
 						"type": "Expression"
-					}
+					},
+					"ifTrueActivities": [
+						{
+							"name": "DB_SCD2_Customer1",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Users/updazvmnag_1777788728692@npupgradassessment.onmicrosoft.com/NB_SCD_Type2_Customer_Dimension",
+								"baseParameters": {
+									"raw_input_path": {
+										"value": "@concat('abfss://', pipeline().parameters.targetContainer, '@stretailkartutkarsh.dfs.core.windows.net/', pipeline().parameters.targetFolderPath)",
+										"type": "Expression"
+									},
+									"curated_output_path": "abfss://curated@stretailkartutkarsh.dfs.core.windows.net/retail/dim_customer/",
+									"storage_account_name": "stretailkartutkarsh"
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "LS_AzureDatabricks",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
 				}
 			}
 		],
